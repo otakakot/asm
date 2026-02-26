@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 )
 
 // List prints all installed skills by scanning the .github/skills directory.
@@ -20,9 +21,13 @@ func List() error {
 
 	var skills []string
 	for _, e := range entries {
-		if e.IsDir() {
-			skills = append(skills, e.Name())
+		if !e.IsDir() {
+			continue
 		}
+		if _, err := os.Stat(filepath.Join(skillsDir, e.Name(), "SKILL.md")); err != nil {
+			continue
+		}
+		skills = append(skills, e.Name())
 	}
 
 	if len(skills) == 0 {
