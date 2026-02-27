@@ -1,78 +1,63 @@
 package skill
 
 import (
-	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
-
-	"github.com/otakakot/asm/internal/github"
-	"github.com/otakakot/asm/internal/history"
 )
 
-const skillsDir = ".github/skills"
-
-// Install fetches a skill from GitHub and installs it into the workspace.
-func Install(ctx context.Context, rawPath string) error {
-	ref, err := github.ParseRepoPath(rawPath)
+// Install copies a downloaded skill from the local cache to the workspace.
+func Install(name string) error {
+	base, err := localSkillsDir()
 	if err != nil {
 		return err
 	}
 
-	name := ref.SkillName()
-	fmt.Printf("Installing skill %q from %s/%s (branch: %s, path: %s)...\n",
-		name, ref.Owner, ref.Repo, ref.Branch, ref.Path)
+	srcDir := filepath.Join(base, name)
 
-	client := github.NewClient(nil)
-
-	// Check that the target directory contains a SKILL.md file.
-	entries, err := client.ListContents(ctx, ref)
-	if err != nil {
-		return fmt.Errorf("listing contents: %w", err)
+	if _, err := os.Stat(filepath.Join(srcDir, "SKILL.md")); err != nil {
+		return fmt.Errorf("skill %q is not downloaded", name)
 	}
 
-	hasSkillMD := false
-	for _, e := range entries {
-		if e.Type == "file" && e.Name == "SKILL.md" {
-			hasSkillMD = true
-			break
-		}
+	destDir := filepath.Join(workspaceSkillsDir, name)
+
+	if err := os.MkdirAll(filepath.Dir(destDir), 0o755); err != nil {
+		return fmt.Errorf("creating directory: %w", err)
 	}
 
-	if !hasSkillMD {
-		return fmt.Errorf("SKILL.md not found at %s: not a valid skill", rawPath)
+	if err := copyDir(srcDir, destDir); err != nil {
+		return fmt.Errorf("copying skill: %w", err)
 	}
 
-	files, err := client.FetchAllFiles(ctx, ref)
-	if err != nil {
-		return fmt.Errorf("fetching skill files: %w", err)
-	}
-
-	if len(files) == 0 {
-		return fmt.Errorf("no files found at %s", rawPath)
-	}
-
-	destDir := filepath.Join(skillsDir, name)
-
-	for relPath, data := range files {
-		dest := filepath.Join(destDir, relPath)
-
-		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-			return fmt.Errorf("creating directory for %s: %w", dest, err)
-		}
-
-		if err := os.WriteFile(dest, data, 0o644); err != nil {
-			return fmt.Errorf("writing %s: %w", dest, err)
-		}
-
-		fmt.Printf("  %s\n", dest)
-	}
-
-	if err := history.Record(name, rawPath); err != nil {
-		return fmt.Errorf("recording history: %w", err)
-	}
-
-	fmt.Printf("Skill %q installed successfully.\n", name)
+	fmt.Printf("Skill %q installed to workspace.\n", name)
 
 	return nil
+}
+
+// copyDir recursively copies src directory to dst.
+func copyDir(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+
+		target := filepath.Join(dst, rel)
+
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", path, err)
+		}
+
+		return os.WriteFile(target, data, 0o644)
+	})
 }

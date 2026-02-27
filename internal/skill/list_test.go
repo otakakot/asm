@@ -10,10 +10,7 @@ import (
 )
 
 func TestList_NoDir(t *testing.T) {
-	tmp := t.TempDir()
-	orig, _ := os.Getwd()
-	t.Cleanup(func() { os.Chdir(orig) })
-	os.Chdir(tmp)
+	t.Setenv("HOME", t.TempDir())
 
 	old := os.Stdout
 	r, w, _ := os.Pipe()
@@ -30,26 +27,22 @@ func TestList_NoDir(t *testing.T) {
 
 	var buf bytes.Buffer
 	buf.ReadFrom(r)
-	if got := buf.String(); got != "No skills installed.\n" {
-		t.Errorf("output = %q, want %q", got, "No skills installed.\n")
+	if got := buf.String(); got != "No skills downloaded.\n" {
+		t.Errorf("output = %q, want %q", got, "No skills downloaded.\n")
 	}
 }
 
 func TestList_WithSkills(t *testing.T) {
 	tmp := t.TempDir()
-	orig, _ := os.Getwd()
-	t.Cleanup(func() { os.Chdir(orig) })
-	os.Chdir(tmp)
+	t.Setenv("HOME", tmp)
 
-	dir := filepath.Join(tmp, ".github", "skills")
+	dir := filepath.Join(tmp, ".asm", "skills")
 	os.MkdirAll(filepath.Join(dir, "alpha"), 0o755)
 	os.MkdirAll(filepath.Join(dir, "beta"), 0o755)
-	// SKILL.md を持つディレクトリのみスキルとみなされる
 	os.WriteFile(filepath.Join(dir, "alpha", "SKILL.md"), []byte("# Alpha"), 0o644)
 	os.WriteFile(filepath.Join(dir, "beta", "SKILL.md"), []byte("# Beta"), 0o644)
-	// SKILL.md がないディレクトリとファイルは無視される
+	// no SKILL.md -> should be ignored
 	os.MkdirAll(filepath.Join(dir, "no-skill-md"), 0o755)
-	os.WriteFile(filepath.Join(dir, "not-a-skill.txt"), []byte("x"), 0o644)
 
 	old := os.Stdout
 	r, w, _ := os.Pipe()
@@ -75,11 +68,9 @@ func TestList_WithSkills(t *testing.T) {
 
 func TestList_EmptyDir(t *testing.T) {
 	tmp := t.TempDir()
-	orig, _ := os.Getwd()
-	t.Cleanup(func() { os.Chdir(orig) })
-	os.Chdir(tmp)
+	t.Setenv("HOME", tmp)
 
-	os.MkdirAll(filepath.Join(tmp, ".github", "skills"), 0o755)
+	os.MkdirAll(filepath.Join(tmp, ".asm", "skills"), 0o755)
 
 	old := os.Stdout
 	r, w, _ := os.Pipe()
@@ -96,7 +87,7 @@ func TestList_EmptyDir(t *testing.T) {
 
 	var buf bytes.Buffer
 	buf.ReadFrom(r)
-	if got := buf.String(); got != "No skills installed.\n" {
-		t.Errorf("output = %q, want %q", got, "No skills installed.\n")
+	if got := buf.String(); got != "No skills downloaded.\n" {
+		t.Errorf("output = %q, want %q", got, "No skills downloaded.\n")
 	}
 }

@@ -8,7 +8,7 @@ import (
 
 // Remove deletes an installed skill from the workspace.
 func Remove(name string) error {
-	dir := filepath.Join(skillsDir, name)
+	dir := filepath.Join(workspaceSkillsDir, name)
 
 	info, err := os.Stat(dir)
 	if err != nil {

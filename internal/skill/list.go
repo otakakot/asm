@@ -6,37 +6,46 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/otakakot/asm/internal/manifest"
 )
 
-// List prints all installed skills by scanning the .github/skills directory.
+// List prints all skills downloaded to the local cache (~/.asm/skills/).
 func List() error {
-	entries, err := os.ReadDir(skillsDir)
+	base, err := localSkillsDir()
+	if err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(base)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			fmt.Println("No skills installed.")
+			fmt.Println("No skills downloaded.")
 			return nil
 		}
 		return fmt.Errorf("reading skills directory: %w", err)
 	}
 
-	var skills []string
+	man, _ := manifest.Load()
+
+	var found bool
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
-		if _, err := os.Stat(filepath.Join(skillsDir, e.Name(), "SKILL.md")); err != nil {
+		if _, err := os.Stat(filepath.Join(base, e.Name(), "SKILL.md")); err != nil {
 			continue
 		}
-		skills = append(skills, e.Name())
+		found = true
+		if s := man.Find(e.Name()); s != nil {
+			fmt.Printf("%s\t%s\n", e.Name(), s.Source)
+		} else {
+			fmt.Println(e.Name())
+		}
 	}
 
-	if len(skills) == 0 {
-		fmt.Println("No skills installed.")
-		return nil
-	}
-
-	for _, name := range skills {
-		fmt.Println(name)
+	if !found {
+		fmt.Println("No skills downloaded.")
 	}
 
 	return nil
